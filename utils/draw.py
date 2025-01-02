@@ -8,24 +8,6 @@ COORD2FLOAT = Tuple[float, float]
 COORD = Union[COORD2FLOAT, Vector2D]
 RELATION = Tuple[Vector2D, float, float] # position, angle, scale
 
-class SpritePrimitive:
-    @staticmethod
-    def get_rect(pos: COORD2FLOAT, width: float, height: float, from_center: bool = False) -> List[COORD2FLOAT]:
-        if from_center:
-            return [
-                (pos[0] - width / 2, pos[1] + height / 2),
-                (pos[0] + width / 2, pos[1] + height / 2),
-                (pos[0] + width / 2, pos[1] - height / 2),
-                (pos[0] - width / 2, pos[1] - height / 2),
-            ]
-        else:
-            return [
-                (pos[0], pos[1]),
-                (pos[0] + width, pos[1]),
-                (pos[0] + width, pos[1] - height),
-                (pos[0], pos[1] - height),
-            ]
-
 class SpriteVertexGroup:
     def __init__(self, vertices: List[COORD] = [], color: COORD3INT = (255, 255, 255)) -> None:
         # create a vector for each vertex
@@ -35,7 +17,7 @@ class SpriteVertexGroup:
         # RELATION: defines how child is related to parent, consists of (position, angle, scale)
         self.children: List[Tuple['SpriteVertexGroup', RELATION]] = []
         # list of groups of computed vertices for all children (recursively), each group is a shape with a color
-        self._vertex_groups: List[Tuple[List[Vector2D], COORD3INT]] = None
+        self.vertex_groups: List[Tuple[List[Vector2D], COORD3INT]] = None
     
     # making a copy
     def copy(self, vertices: Optional[List[COORD]] = None, with_children: bool = False) -> 'SpriteVertexGroup':
@@ -61,29 +43,29 @@ class SpriteVertexGroup:
             (position, angle, scale) # RELATION
         ))
 
-    def _compute_vertex_groups(self) -> List[Tuple[List[Vector2D], COORD3INT]]:
+    def compute_vertex_groups(self) -> List[Tuple[List[Vector2D], COORD3INT]]:
         # compute vertex_groups if not computed yet
         # analogy: set the vertices in stone / apply the transformations of all the children recursively and store the vertices
-        if self._vertex_groups == None:
+        if self.vertex_groups == None:
             # rotate vertex by angle
             # scale the vertex
             # move the vertex by position (gives coordinate in current axis)
-            self._vertex_groups = []
+            self.vertex_groups = []
             for child, (position, angle, scale) in self.children:
-                for vertex_group in child._compute_vertex_groups():
-                    self._vertex_groups.append((
+                for vertex_group in child.compute_vertex_groups():
+                    self.vertex_groups.append((
                         [vertex.rotate(angle) * scale + position for vertex in vertex_group[0]],
                         vertex_group[1]
                     ))
-            self._vertex_groups.append((
+            self.vertex_groups.append((
                 self.vertices,
                 self.color
             ))
-        return self._vertex_groups
+        return self.vertex_groups
 
     def apply_transform(self, position: Vector2D = Vector2D.origin(), angle: float = 0.0, scale: float = 1.0, check_validity: bool = True) -> List[Tuple[List[Vector2D], COORD3INT]]:
         vertex_groups = []
-        for vertex_group in self._compute_vertex_groups():
+        for vertex_group in self.compute_vertex_groups():
             # either check_validity is turned off
             # or if turned on, it is a valid shape (has atleast 3 vertices)
             if not check_validity or len(vertex_group[0]) >= 3:
@@ -94,25 +76,32 @@ class SpriteVertexGroup:
                 ))
         return vertex_groups
 
-class SpriteHandler:
+class SpritePrimitive:
+    @staticmethod
+    def rect_primitive(pos: COORD2FLOAT, width: float, height: float, from_center: bool = False) -> List[COORD2FLOAT]:
+        if from_center:
+            return [
+                (pos[0] - width / 2, pos[1] + height / 2),
+                (pos[0] + width / 2, pos[1] + height / 2),
+                (pos[0] + width / 2, pos[1] - height / 2),
+                (pos[0] - width / 2, pos[1] - height / 2),
+            ]
+        else:
+            return [
+                (pos[0], pos[1]),
+                (pos[0] + width, pos[1]),
+                (pos[0] + width, pos[1] - height),
+                (pos[0], pos[1] - height),
+            ]
+
+class SpriteBody:
     def __init__(self):
         # empty svg to hold others svgs
-        self.svg = SpriteVertexGroup()
         self.position = Vector2D.origin()
         self.angle = 0
         self.scale = 1
-    
-    # adding shapes wrt to sprite origin
-    def add_rect(self, position: COORD, width: float, height: float, from_center: bool = False, color: COORD3INT = (255, 255, 255)) -> None:
-        position = position if type(position) == Vector2D else Vector2D.from_tuple(position)
-        self.svg.add_group(
-            SpriteVertexGroup(
-                SpritePrimitive.get_rect(
-                    (0, 0), width=width, height=height, from_center=from_center
-                ), color=color
-            ),
-            position=position
-        )
+        self.svg = SpriteVertexGroup()
+        self.collision_svg = None
 
     def set(self, position: Vector2D = None, angle: float = None, scale: float = None) -> None:
         if position != None:
@@ -122,54 +111,73 @@ class SpriteHandler:
         if scale != None:
             self.scale = scale
 
-    def draw(self, avour: Avour) -> None:
+    # adding shapes wrt to sprite origin
+    def add_rect(self, position: COORD, width: float, height: float, from_center: bool = False, color: COORD3INT = (255, 255, 255)) -> None:
+        position = position if type(position) == Vector2D else Vector2D.from_tuple(position)
+        self.svg.add_group(
+            SpriteVertexGroup(
+                SpritePrimitive.rect_primitive(
+                    (0, 0), width=width, height=height, from_center=from_center
+                ), color=color
+            ),
+            position=position
+        )
+
+    def compute_collision_mesh(self) -> SpriteVertexGroup:
+        if self.collision_svg == None:
+            top_most = -1
+            bottom_most = -1
+            left_most = -1
+            right_most = -1
+            for shape, color in self.svg.compute_vertex_groups():
+                for vertex in shape:
+                    if top_most == -1 or vertex.y > top_most:
+                        top_most = vertex.y
+                    if bottom_most == -1 or vertex.y < bottom_most:
+                        bottom_most = vertex.y
+                    if left_most == -1 or vertex.x < left_most:
+                        left_most = vertex.x    
+                    if right_most == -1 or vertex.x > right_most:
+                        right_most = vertex.x
+            self.collision_svg = SpriteVertexGroup(
+                [(left_most, top_most), (right_most, top_most), (right_most, bottom_most), (left_most, bottom_most)],
+                color=(45, 209, 42)
+            )
+        return self.collision_svg
+
+    def get_collision_mesh(self) -> Tuple[Vector2D, List[Vector2D]]:
+        for shape, color in self.compute_collision_mesh().apply_transform(position=self.position, angle=self.angle, scale=self.scale, check_validity=False):
+            return self.position, shape
+
+    def draw(self, avour: Avour, show_collision_mesh: bool = True) -> None:
         avour.fill(True)
         avour.thickness(1)
         for shape, color in self.svg.apply_transform(position=self.position, angle=self.angle, scale=self.scale, check_validity=True):
             avour.color(color)
             avour.polygon([vertex.tuple() for vertex in shape])
-
-class PhysicsSpriteHandler(SpriteHandler):
-    def __init__(self):
-        super().__init__()
-        self.collision_svg = None
-        self.on_collision_callable: Callable = None
-
-    def calculate_collision_mesh(self):
-        if self.collision_svg != None:
-            return
-        top_most = -1
-        bottom_most = -1
-        left_most = -1
-        right_most = -1
-        for shape, color in self.svg._compute_vertex_groups():
-            for vertex in shape:
-                if top_most == -1 or vertex.y > top_most:
-                    top_most = vertex.y
-                if bottom_most == -1 or vertex.y < bottom_most:
-                    bottom_most = vertex.y
-                if left_most == -1 or vertex.x < left_most:
-                    left_most = vertex.x    
-                if right_most == -1 or vertex.x > right_most:
-                    right_most = vertex.x
-        self.collision_svg = SpriteVertexGroup(
-            [(left_most, top_most), (right_most, top_most), (right_most, bottom_most), (left_most, bottom_most)],
-            color=(45, 209, 42)
-        )
-
-    def draw(self, avour: Avour, show_collision_mesh: bool = True) -> None:
-        super().draw(avour)
         if show_collision_mesh:
-            self.calculate_collision_mesh()
             avour.fill(False)
             avour.thickness(1)
-            for shape, color in self.collision_svg.apply_transform(position=self.position, angle=self.angle, scale=self.scale, check_validity=True):
+            for shape, color in self.compute_collision_mesh().apply_transform(position=self.position, angle=self.angle, scale=self.scale, check_validity=True):
                 avour.color(color)
                 avour.polygon([vertex.tuple() for vertex in shape])
 
-    def on_collision(self, func: Callable) -> None:
-        self.on_collision_callable = func
+    @staticmethod
+    def rect_body(width: float, height: float, color: COORD3INT = (255, 255, 255)) -> 'SpriteBody':
+        sprite = SpriteBody()
+        sprite.add_rect((0, 0), width, height, from_center=True, color=color)
+        return sprite
 
-    def check_collision(self, other) -> bool:
-        if self.on_collision_callable != None:
-            self.on_collision_callable()
+SHAPE = List[Vector2D]
+BODY = Tuple[Vector2D, SHAPE] # center/origin, shape
+
+class CollisionHandler:
+    def __init__(self):
+        self.grid_size = 100
+
+    def __call__(self, bodies: List[BODY]) -> bool:
+        for body in bodies:
+            print(body[0])
+
+    def assign_grid_locations():
+        ...

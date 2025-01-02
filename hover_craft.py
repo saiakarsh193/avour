@@ -2,7 +2,7 @@ from typing import Tuple
 from avour import Avour
 from utils.math import clip
 from utils.vector import Vector2D, cross_product_3d
-from utils.draw import PhysicsSpriteHandler, COORD
+from utils.draw import SpriteBody, COORD
 
 class Thruster:
     dim = (3, 8)
@@ -61,14 +61,14 @@ class Craft:
         self.thruster_right = Thruster(Vector2D.right(self.main_frame_thruster_distance), self)
 
         # sprite handler
-        self.sprite = PhysicsSpriteHandler()
+        self.sprite = SpriteBody()
         self.sprite.add_rect(Vector2D.origin(), self.main_frame_dim[0], self.main_frame_dim[1], from_center=True, color=(255, 255, 255))
         self.sprite.add_rect(Vector2D.left(self.main_frame_thruster_distance), Thruster.dim[0], Thruster.dim[1], from_center=True, color=(150, 150, 150))
         self.sprite.add_rect(Vector2D.right(self.main_frame_thruster_distance), Thruster.dim[0], Thruster.dim[1], from_center=True, color=(150, 150, 150))
 
     def draw(self, avour: Avour) -> None:
         self.sprite.set(position=self.position, angle=self.angle)
-        self.sprite.draw(avour, show_collision_mesh=True)
+        self.sprite.draw(avour, show_collision_mesh=False)
         self.thruster_left.draw_fire(avour)
         self.thruster_right.draw_fire(avour)
 
