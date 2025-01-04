@@ -1,4 +1,5 @@
 import math
+import random
 from typing import Union, Tuple, Optional
 
 from .math import clip, sign
@@ -106,6 +107,10 @@ class Vector2D:
     @staticmethod
     def origin() -> 'Vector2D':
         return Vector2D(0, 0)
+    
+    @staticmethod
+    def random() -> 'Vector2D':
+        return Vector2D(2 * random.random() - 1, 2 * random.random() - 1)
     
     @staticmethod
     def left(mag: float = 1.0) -> 'Vector2D':

@@ -95,13 +95,14 @@ class SpritePrimitive:
             ]
 
 class SpriteBody:
-    def __init__(self):
+    def __init__(self) -> None:
         # empty svg to hold others svgs
         self.position = Vector2D.origin()
         self.angle = 0
         self.scale = 1
         self.svg = SpriteVertexGroup()
         self.collision_svg = None
+        self.collision_func: Callable[['SpriteBody', 'SpriteBody'], None] = None
 
     def set(self, position: Vector2D = None, angle: float = None, scale: float = None) -> None:
         if position != None:
@@ -113,7 +114,7 @@ class SpriteBody:
 
     # adding shapes wrt to sprite origin
     def add_rect(self, position: COORD, width: float, height: float, from_center: bool = False, color: COORD3INT = (255, 255, 255)) -> None:
-        position = position if type(position) == Vector2D else Vector2D.from_tuple(position)
+        position = position if isinstance(position, Vector2D) else Vector2D.from_tuple(position)
         self.svg.add_group(
             SpriteVertexGroup(
                 SpritePrimitive.rect_primitive(
@@ -149,11 +150,13 @@ class SpriteBody:
         for shape, color in self.compute_collision_mesh().apply_transform(position=self.position, angle=self.angle, scale=self.scale, check_validity=False):
             return self.position, shape
 
-    def draw(self, avour: Avour, show_collision_mesh: bool = True) -> None:
+    def draw(self, avour: Avour, show_collision_mesh: bool = True, use_sprite_color: bool = True) -> None:
+        avour.push()
         avour.fill(True)
         avour.thickness(1)
         for shape, color in self.svg.apply_transform(position=self.position, angle=self.angle, scale=self.scale, check_validity=True):
-            avour.color(color)
+            if use_sprite_color:
+                avour.color(color)
             avour.polygon([vertex.tuple() for vertex in shape])
         if show_collision_mesh:
             avour.fill(False)
@@ -161,23 +164,10 @@ class SpriteBody:
             for shape, color in self.compute_collision_mesh().apply_transform(position=self.position, angle=self.angle, scale=self.scale, check_validity=True):
                 avour.color(color)
                 avour.polygon([vertex.tuple() for vertex in shape])
+        avour.pop()
 
     @staticmethod
     def rect_body(width: float, height: float, color: COORD3INT = (255, 255, 255)) -> 'SpriteBody':
         sprite = SpriteBody()
         sprite.add_rect((0, 0), width, height, from_center=True, color=color)
         return sprite
-
-SHAPE = List[Vector2D]
-BODY = Tuple[Vector2D, SHAPE] # center/origin, shape
-
-class CollisionHandler:
-    def __init__(self):
-        self.grid_size = 100
-
-    def __call__(self, bodies: List[BODY]) -> bool:
-        for body in bodies:
-            print(body[0])
-
-    def assign_grid_locations():
-        ...

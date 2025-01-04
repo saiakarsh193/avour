@@ -3,16 +3,83 @@ from typing import List, Tuple, Union, Optional, Dict
 
 from .math import sign
 from .vector import Vector2D
+from .draw import SpriteBody
 
 #########################
 # collisions
 
 def rect_collision(rect_1_tl: Tuple[float, float], rect_1_br: Tuple[float, float], rect_2_tl: Tuple[float, float], rect_2_br: Tuple[float, float]) -> bool:
     # https://silentmatt.com/rectangle-intersection/
-    if rect_1_tl[0] <= rect_2_br[0] and rect_1_br[0] >= rect_2_tl[0] and rect_1_tl[1] <= rect_2_br[1] and rect_1_br[1] >= rect_2_tl[1]:
+    if rect_1_tl[0] <= rect_2_br[0] and rect_1_br[0] >= rect_2_tl[0] and rect_1_tl[1] >= rect_2_br[1] and rect_1_br[1] <= rect_2_tl[1]:
         return True
     return False
 
+class CollisionHandler:
+    def __init__(self, grid_size: float = 50) -> None:
+        self.grid_size = grid_size
+
+    def assign_grid_locations(self, sprites: List[SpriteBody]) -> Tuple[List[Tuple[int, int]], Dict[Tuple[int, int], List[SpriteBody]]]:
+        #  0.17 ->  0  =>  0 -> 1
+        # -0.17 -> -1  => -1 -> 0
+        #  8.61 ->  8  =>  8 -> 9
+        # -8.61 -> -9  => -9 -> -8
+        grid_positions = []
+        grid_mapper = {}
+        for sprite in sprites:
+            sprite_position = sprite.get_collision_mesh()[0]
+            grid_position = math.floor(sprite_position.x / self.grid_size), math.floor(sprite_position.y / self.grid_size)
+            if not grid_position in grid_mapper:
+                grid_mapper[grid_position] = []
+            grid_positions.append(grid_position)
+            grid_mapper[grid_position].append(sprite)
+        return grid_positions, grid_mapper
+
+    def get_adjacent_sprites(self, grid_position: Tuple[int, int], grid_mapper: Dict[Tuple[int, int], List[SpriteBody]]) -> List[SpriteBody]:
+        # 0 1 2
+        # 3 4 5
+        # 6 7 8
+        x, y = grid_position
+        sprites = []
+        # 0
+        if (x - 1, y - 1) in grid_mapper:
+            sprites += grid_mapper[(x - 1, y - 1)]
+        # 1
+        if (x - 1, y) in grid_mapper:
+            sprites += grid_mapper[(x - 1, y)]
+        # 2
+        if (x - 1, y + 1) in grid_mapper:
+            sprites += grid_mapper[(x - 1, y + 1)]
+        # 3
+        if (x, y - 1) in grid_mapper:
+            sprites += grid_mapper[(x, y - 1)]
+        # 4
+        if (x, y) in grid_mapper:
+            sprites += grid_mapper[(x, y)]
+        # 5
+        if (x, y + 1) in grid_mapper:
+            sprites += grid_mapper[(x, y + 1)]
+        # 6
+        if (x + 1, y - 1) in grid_mapper:
+            sprites += grid_mapper[(x + 1, y - 1)]
+        # 7
+        if (x + 1, y) in grid_mapper:
+            sprites += grid_mapper[(x + 1, y)]
+        # 8
+        if (x + 1, y + 1) in grid_mapper:
+            sprites += grid_mapper[(x + 1, y + 1)]
+        return sprites
+    
+    def compute_collisions(self, sprites: List[SpriteBody]) -> None:
+        grid_positions, grid_mapper = self.assign_grid_locations(sprites)
+        for sprite, grid_position in zip(sprites, grid_positions):
+            for target in self.get_adjacent_sprites(grid_position, grid_mapper):
+                if sprite == target:
+                    continue
+                shape_a = sprite.get_collision_mesh()[1]
+                shape_b = target.get_collision_mesh()[1]
+                if rect_collision(shape_a[0].tuple(), shape_a[2].tuple(), shape_b[0].tuple(), shape_b[2].tuple()):
+                    if sprite.collision_func != None:
+                        sprite.collision_func(sprite, target)
 
 #########################
 # constrained body

@@ -28,7 +28,7 @@ def get_mapper(module):
         if 'MOTION_' in val or 'MOD_' in val:
             continue
         attr = getattr(module, val)
-        if type(attr) == int:
+        if isinstance(attr, int):
             if not attr in key_mapper: # to prevent repeat keys
                 key_mapper[attr] = val
     return key_mapper
