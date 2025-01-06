@@ -37,18 +37,6 @@ class RigidBody(SpriteBody):
         self.angular_velocity += self.angular_acceleration * dt
         self.angle += self.angular_velocity * dt
 
-    def on_collision(self, other: 'RigidBody', sat_axis: Vector2D) -> None:
-        disp = self.position - other.position # other->self (outward) direction
-        # outward vector is in opposite direction to collision axis
-        if disp.dot(sat_axis) < 0:
-            sat_axis = sat_axis * -1
-        # collision axis is in direction of outward vector
-        self.position += sat_axis / 2
-        vel_par = self.velocity.component_parallel(sat_axis)
-        vel_perp = self.velocity - vel_par
-        # reverse velocity in direction parallel to collision axis
-        self.velocity = vel_perp + (-vel_par)
-
     @staticmethod
     def rect_body(width: float, height: float, color: COORD3INT = (255, 255, 255)) -> 'RigidBody':
         sprite = RigidBody()
@@ -128,6 +116,7 @@ class SAT:
 
 class CollisionHandler:
     GRID_SIZE = 50
+    COR = 1.0 # 
 
     @staticmethod
     def assign_grid_locations(sprites: List[BODY]) -> Tuple[List[Tuple[int, int]], Dict[Tuple[int, int], List[BODY]]]:
@@ -150,24 +139,27 @@ class CollisionHandler:
         return grid_positions, grid_mapper
 
     @staticmethod
-    def get_sprites_from_grid(grid_position: Tuple[int, int], grid_mapper: Dict[Tuple[int, int], List[BODY]]) -> List[BODY]:
+    def get_sprites_from_grid(grid_position: Tuple[int, int], grid_mapper: Dict[Tuple[int, int], List[BODY]], with_optimization: bool = True) -> List[BODY]:
         # 0 1 2
         # 3 4 5
         # 6 7 8
+        # optimized version: just need to check 4, 5, 6, 7, 8
+        # as the other grids are covered by the other pair
         x, y = grid_position
         sprites = []
-        # 0
-        if (x - 1, y - 1) in grid_mapper:
-            sprites += grid_mapper[(x - 1, y - 1)]
-        # 1
-        if (x - 1, y) in grid_mapper:
-            sprites += grid_mapper[(x - 1, y)]
-        # 2
-        if (x - 1, y + 1) in grid_mapper:
-            sprites += grid_mapper[(x - 1, y + 1)]
-        # 3
-        if (x, y - 1) in grid_mapper:
-            sprites += grid_mapper[(x, y - 1)]
+        if not with_optimization:
+            # 0
+            if (x - 1, y - 1) in grid_mapper:
+                sprites += grid_mapper[(x - 1, y - 1)]
+            # 1
+            if (x - 1, y) in grid_mapper:
+                sprites += grid_mapper[(x - 1, y)]
+            # 2
+            if (x - 1, y + 1) in grid_mapper:
+                sprites += grid_mapper[(x - 1, y + 1)]
+            # 3
+            if (x, y - 1) in grid_mapper:
+                sprites += grid_mapper[(x, y - 1)]
         # 4
         if (x, y) in grid_mapper:
             sprites += grid_mapper[(x, y)]
@@ -186,12 +178,43 @@ class CollisionHandler:
         return sprites
     
     @staticmethod
+    def handle_rigid_bodies(source: RigidBody, target: RigidBody, sat_axis: Vector2D) -> None:
+        # handling wrt to source
+        # source to target vector
+        s2t_disp = target.position - source.position
+        # if collision axis is in opposite direction to source->target, reverse it
+        if s2t_disp.dot(sat_axis) < 0:
+            sat_axis = sat_axis * -1
+        # now collision axis is in direction of source->target
+        source.position -= sat_axis / 2 # move source away from target
+        target.position += sat_axis / 2 # move target away from source
+        # only components of velocity parallel to collision axis are affected
+        # so we separate them out
+        v_s = source.velocity
+        v_s_para = v_s.component_parallel(sat_axis)
+        v_s_perp = v_s - v_s_para
+        v_t = target.velocity
+        v_t_para = v_t.component_parallel(sat_axis)
+        v_t_perp = v_t - v_t_para
+        # https://en.wikipedia.org/wiki/Coefficient_of_restitution
+        num_1 = v_s_para * source.mass + v_t_para * target.mass
+        num_2 = (v_t_para - v_s_para) * CollisionHandler.COR
+        den = source.mass + target.mass
+        v_s_para_final = (num_1 + num_2 * target.mass) / den
+        v_t_para_final = (num_1 - num_2 * source.mass) / den
+        # combine them again to get final velocity vectors
+        v_s = v_s_para_final + v_s_perp
+        v_t = v_t_para_final + v_t_perp
+        source.velocity = v_s
+        target.velocity = v_t
+
+    @staticmethod
     def handle_collisions(sprites: List[BODY]) -> None:
         grid_positions, grid_mapper = CollisionHandler.assign_grid_locations(sprites)
         for source, grid_position in zip(sprites, grid_positions):
             # rather than comparing every source with every other target (N^2)
             # we narrow the search space using grid based tagging
-            for target in CollisionHandler.get_sprites_from_grid(grid_position, grid_mapper):
+            for target in CollisionHandler.get_sprites_from_grid(grid_position, grid_mapper, with_optimization=True):
                 # skip if source and target are same
                 if source == target:
                     continue
@@ -204,9 +227,9 @@ class CollisionHandler:
                 # if a collison callback function is defined, call it
                 if source.collision_func != None:
                     source.collision_func(source, target)
-                # if rigid body, call internal collision handler
+                # if rigid body, call rigid body collision handler
                 if isinstance(source, RigidBody) and isinstance(target, RigidBody):
-                    source.on_collision(target, sat_axis)
+                    CollisionHandler.handle_rigid_bodies(source, target, sat_axis)
 
 #########################
 # constrained body

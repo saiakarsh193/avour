@@ -101,7 +101,7 @@ class Vector2D:
         return vec
     
     def component_parallel(self, other: 'Vector2D') -> 'Vector2D':
-        other_dir = other.normalize()
+        other_dir = other.normalize(ignore_zero_mag=True)
         return other_dir * self.dot(other_dir)
     
     def component_perpendicular(self, other: 'Vector2D') -> 'Vector2D':
