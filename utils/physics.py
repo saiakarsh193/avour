@@ -3,7 +3,57 @@ from typing import List, Tuple, Union, Optional, Dict
 
 from .math import sign
 from .vector import Vector2D
-from .draw import SpriteBody
+from .draw import SpriteBody, COORD3INT
+
+BODY = Union[SpriteBody, 'RigidBody']
+
+#########################
+# generic
+
+class RigidBody(SpriteBody):
+    GRAVITY = 9.8
+
+    def __init__(self, mass: float = 100.0, moi: float = 1_000.0) -> None:
+        super().__init__()
+        self.mass = mass
+        self.moment_of_inertia = moi
+        self.velocity = Vector2D.origin()
+        self.acceleration = Vector2D.origin()
+        self.angular_velocity = 0.0
+        self.angular_acceleration = 0.0
+
+    def get_net_force(self) -> Tuple[Vector2D, float]:
+        gravity_force = Vector2D.down(self.GRAVITY) * self.mass
+        net_force = 0 # gravity_force
+        torque_mag = 0
+        return net_force, torque_mag
+
+    def update(self, dt: float = 0.1) -> None:
+        net_force, torque_mag = self.get_net_force()
+        self.acceleration = net_force / self.mass
+        self.velocity += self.acceleration * dt
+        self.position += self.velocity * dt
+        self.angular_acceleration = torque_mag / self.moment_of_inertia
+        self.angular_velocity += self.angular_acceleration * dt
+        self.angle += self.angular_velocity * dt
+
+    def on_collision(self, other: 'RigidBody', sat_axis: Vector2D) -> None:
+        disp = self.position - other.position # other->self (outward) direction
+        # outward vector is in opposite direction to collision axis
+        if disp.dot(sat_axis) < 0:
+            sat_axis = sat_axis * -1
+        # collision axis is in direction of outward vector
+        self.position += sat_axis / 2
+        vel_par = self.velocity.component_parallel(sat_axis)
+        vel_perp = self.velocity - vel_par
+        # reverse velocity in direction parallel to collision axis
+        self.velocity = vel_perp + (-vel_par)
+
+    @staticmethod
+    def rect_body(width: float, height: float, color: COORD3INT = (255, 255, 255)) -> 'RigidBody':
+        sprite = RigidBody()
+        sprite.add_rect((0, 0), width, height, from_center=True, color=color)
+        return sprite
 
 #########################
 # collisions
@@ -14,11 +64,73 @@ def rect_collision(rect_1_tl: Tuple[float, float], rect_1_br: Tuple[float, float
         return True
     return False
 
-class CollisionHandler:
-    def __init__(self, grid_size: float = 50) -> None:
-        self.grid_size = grid_size
+AXIS = Tuple[Vector2D, Vector2D] # (a, d) => a + f * d (vector line equation representation)
 
-    def assign_grid_locations(self, sprites: List[SpriteBody]) -> Tuple[List[Tuple[int, int]], Dict[Tuple[int, int], List[SpriteBody]]]:
+class SAT:
+    # Separating Axis Theorem to check if meshes collide
+    # https://www.metanetsoftware.com/technique/tutorialA.html
+
+    @staticmethod
+    def vector_projection_on_axis(axis: AXIS, point: Vector2D) -> Vector2D:
+        fac = (point - axis[0]).dot(axis[1]) / axis[1].mag_square()
+        return axis[0] + axis[1] * fac
+    
+    @staticmethod
+    def vector_projection_factor_on_axis(axis: AXIS, point: Vector2D) -> float:
+        return (point - axis[0]).dot(axis[1]) / axis[1].mag_square()
+    
+    @staticmethod
+    def factor_to_vector_on_axis(axis: AXIS, fac: float) -> Vector2D:
+        return axis[0] + axis[1] * fac
+
+    @staticmethod
+    def get_axes_for_shape(shape: List[Vector2D]) -> List[AXIS]:
+        axes = []
+        for i in range(len(shape)):
+            axes.append((
+                shape[i], # a
+                shape[(i + 1) % len(shape)] - shape[i] # d = a2 - a1 (a2 -> a1 + 1)
+            ))
+        return axes
+    
+    @staticmethod
+    def shape_projection_on_axis(axis: AXIS, shape: List[Vector2D]) -> Tuple[float, float]:
+        facs = [SAT.vector_projection_factor_on_axis(axis, point) for point in shape]
+        return min(facs), max(facs)
+    
+    @staticmethod
+    def shapes_projection_overlap_on_axis(axis: AXIS, source_shape: List[Vector2D], target_shape: List[Vector2D]) -> Tuple[float, Vector2D, Vector2D]:
+        min_s, max_s = SAT.shape_projection_on_axis(axis, source_shape)
+        min_t, max_t = SAT.shape_projection_on_axis(axis, target_shape)
+        # overlap = max(0, min(maxa, maxb) - max(mina, minb))
+        min_o, max_o = max(min_s, min_t), min(max_s, max_t) # rightmost (maximum value) min and leftmost (minmum value) max should be in order
+        return max_o - min_o, SAT.factor_to_vector_on_axis(axis, min_o), SAT.factor_to_vector_on_axis(axis, max_o)
+
+    @staticmethod
+    def check_collision(source_shape: List[Vector2D], target_shape: List[Vector2D]) -> Optional[Vector2D]:
+        axis_with_no_overlap = False
+        min_overlap_factor = -1
+        min_overlap_vectors = None
+        for axis in SAT.get_axes_for_shape(source_shape) + SAT.get_axes_for_shape(target_shape):
+            # project both shapes to an axis, and get their overlap (1D projection)
+            overlap_factor, *o_vectors = SAT.shapes_projection_overlap_on_axis(axis, source_shape, target_shape)
+            # if no overlap in even one axis, there is no collision
+            if overlap_factor < 0:
+                axis_with_no_overlap = True
+                break
+            # we need min overlap axis to decide which direction the collision is taking place
+            if min_overlap_factor == -1 or overlap_factor < min_overlap_factor:
+                min_overlap_factor = overlap_factor
+                min_overlap_vectors = o_vectors
+        if axis_with_no_overlap:
+            return None
+        return min_overlap_vectors[0] - min_overlap_vectors[1]
+
+class CollisionHandler:
+    GRID_SIZE = 50
+
+    @staticmethod
+    def assign_grid_locations(sprites: List[BODY]) -> Tuple[List[Tuple[int, int]], Dict[Tuple[int, int], List[BODY]]]:
         #  0.17 ->  0  =>  0 -> 1
         # -0.17 -> -1  => -1 -> 0
         #  8.61 ->  8  =>  8 -> 9
@@ -27,14 +139,18 @@ class CollisionHandler:
         grid_mapper = {}
         for sprite in sprites:
             sprite_position = sprite.get_collision_mesh()[0]
-            grid_position = math.floor(sprite_position.x / self.grid_size), math.floor(sprite_position.y / self.grid_size)
+            grid_position = (
+                math.floor(sprite_position.x / CollisionHandler.GRID_SIZE),
+                math.floor(sprite_position.y / CollisionHandler.GRID_SIZE)
+            )
             if not grid_position in grid_mapper:
                 grid_mapper[grid_position] = []
             grid_positions.append(grid_position)
             grid_mapper[grid_position].append(sprite)
         return grid_positions, grid_mapper
 
-    def get_adjacent_sprites(self, grid_position: Tuple[int, int], grid_mapper: Dict[Tuple[int, int], List[SpriteBody]]) -> List[SpriteBody]:
+    @staticmethod
+    def get_sprites_from_grid(grid_position: Tuple[int, int], grid_mapper: Dict[Tuple[int, int], List[BODY]]) -> List[BODY]:
         # 0 1 2
         # 3 4 5
         # 6 7 8
@@ -69,17 +185,28 @@ class CollisionHandler:
             sprites += grid_mapper[(x + 1, y + 1)]
         return sprites
     
-    def compute_collisions(self, sprites: List[SpriteBody]) -> None:
-        grid_positions, grid_mapper = self.assign_grid_locations(sprites)
-        for sprite, grid_position in zip(sprites, grid_positions):
-            for target in self.get_adjacent_sprites(grid_position, grid_mapper):
-                if sprite == target:
+    @staticmethod
+    def handle_collisions(sprites: List[BODY]) -> None:
+        grid_positions, grid_mapper = CollisionHandler.assign_grid_locations(sprites)
+        for source, grid_position in zip(sprites, grid_positions):
+            # rather than comparing every source with every other target (N^2)
+            # we narrow the search space using grid based tagging
+            for target in CollisionHandler.get_sprites_from_grid(grid_position, grid_mapper):
+                # skip if source and target are same
+                if source == target:
                     continue
-                shape_a = sprite.get_collision_mesh()[1]
-                shape_b = target.get_collision_mesh()[1]
-                if rect_collision(shape_a[0].tuple(), shape_a[2].tuple(), shape_b[0].tuple(), shape_b[2].tuple()):
-                    if sprite.collision_func != None:
-                        sprite.collision_func(sprite, target)
+                source_shape = source.get_collision_mesh()[1]
+                target_shape = target.get_collision_mesh()[1]
+                # if SAT is None, there is definitely no collision
+                sat_axis = SAT.check_collision(source_shape, target_shape)
+                if sat_axis == None:
+                    continue
+                # if a collison callback function is defined, call it
+                if source.collision_func != None:
+                    source.collision_func(source, target)
+                # if rigid body, call internal collision handler
+                if isinstance(source, RigidBody) and isinstance(target, RigidBody):
+                    source.on_collision(target, sat_axis)
 
 #########################
 # constrained body

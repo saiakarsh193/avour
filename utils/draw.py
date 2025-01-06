@@ -1,10 +1,8 @@
 from typing import List, Tuple, Optional, Union, Callable
 
 from .vector import Vector2D
-from avour import Avour
+from avour import Avour, COORD3INT, COORD2FLOAT
 
-COORD3INT = Tuple[int, int, int]
-COORD2FLOAT = Tuple[float, float]
 COORD = Union[COORD2FLOAT, Vector2D]
 RELATION = Tuple[Vector2D, float, float] # position, angle, scale
 
@@ -104,14 +102,6 @@ class SpriteBody:
         self.collision_svg = None
         self.collision_func: Callable[['SpriteBody', 'SpriteBody'], None] = None
 
-    def set(self, position: Vector2D = None, angle: float = None, scale: float = None) -> None:
-        if position != None:
-            self.position = position
-        if angle != None:
-            self.angle = angle
-        if scale != None:
-            self.scale = scale
-
     # adding shapes wrt to sprite origin
     def add_rect(self, position: COORD, width: float, height: float, from_center: bool = False, color: COORD3INT = (255, 255, 255)) -> None:
         position = position if isinstance(position, Vector2D) else Vector2D.from_tuple(position)
@@ -165,9 +155,3 @@ class SpriteBody:
                 avour.color(color)
                 avour.polygon([vertex.tuple() for vertex in shape])
         avour.pop()
-
-    @staticmethod
-    def rect_body(width: float, height: float, color: COORD3INT = (255, 255, 255)) -> 'SpriteBody':
-        sprite = SpriteBody()
-        sprite.add_rect((0, 0), width, height, from_center=True, color=color)
-        return sprite

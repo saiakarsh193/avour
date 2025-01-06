@@ -54,6 +54,9 @@ class Vector2D:
 
     def mag(self) -> float:
         return math.sqrt(self.x**2 + self.y**2)
+    
+    def mag_square(self) -> float:
+        return self.x**2 + self.y**2
 
     def normalize(self, ignore_zero_mag: bool = False) -> 'Vector2D':
         if ignore_zero_mag and self.mag() == 0:
@@ -96,6 +99,13 @@ class Vector2D:
         if origin != None:
             vec = vec + origin
         return vec
+    
+    def component_parallel(self, other: 'Vector2D') -> 'Vector2D':
+        other_dir = other.normalize()
+        return other_dir * self.dot(other_dir)
+    
+    def component_perpendicular(self, other: 'Vector2D') -> 'Vector2D':
+        return self - self.component_parallel(other)
     
     def copy(self) -> 'Vector2D':
         return Vector2D(self.x, self.y)

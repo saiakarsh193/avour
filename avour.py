@@ -12,9 +12,8 @@ COORD2FLOAT = Tuple[float, float]
 COORD4INT = Tuple[int, int, int, int]
 COORD3INT = Tuple[int, int, int]
 COORD2INT = Tuple[int, int]
-COLOR_EXTENDED = Union[int, COORD3INT, COORD4INT]
 COLOR = COORD4INT
-COORD = COORD3FLOAT
+COLOR_EXTENDED = Union[int, COORD3INT, COORD4INT]
 TEXT_ANCHOR_X = Literal['left', 'center', 'right']
 TEXT_ANCHOR_Y = Literal['top', 'center', 'bottom', 'baseline']
 
@@ -47,6 +46,10 @@ class Avour:
         self.window.switch_to() # tell pyglet that this is the current window
 
         # set window event handlers (both input and others)
+        # NOTE: we directly bind on_draw() rather than schedule it
+        # because, scheduling forces N calls to be made every second (leading to screen tear and shuttering black screen)
+        # but if we bind it, it will automatically reduce call count (reducing frame rate) and prevents artifacts
+        self.window.on_draw = self._frame_wrapper
         self.window.on_key_press = self._on_keydown_wrapper
         self.window.on_key_release = self._on_keyup_wrapper
         self.window.on_mouse_motion = self._on_mousemove_wrapper
@@ -204,7 +207,7 @@ class Avour:
 
     # main loop
 
-    def _frame_wrapper(self, dt: float) -> None:
+    def _frame_wrapper(self) -> None:
         # initialize frame level variables
         self.batch = pyglet.graphics.Batch()
         self.objects = []
@@ -239,7 +242,8 @@ class Avour:
         # main loop runs at a certain interval (and calls on_draw, input event handlers for example)
         # and will also call all other schedules automatically based on their interval
         # NOTE: rather than using inbuilt on_draw(), we use _frame_wrapper() for handling the drawing
-        pyglet.clock.schedule_interval(self._frame_wrapper, 1 / self.frame_rate) # schedule frame draw call
+        # we directly bind it in __init__ instead of scheduling it (check comments there)
+        # pyglet.clock.schedule_interval(self._frame_wrapper, 1 / self.frame_rate) # schedule frame draw call
         pyglet.clock.schedule_interval(self._physics_wrapper, 1 / self.physics_rate) # schedule physics loop call
         pyglet.app.run(1 / self.frame_rate) # main loop runs at same rate as drawing
 
