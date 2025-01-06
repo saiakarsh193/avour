@@ -20,7 +20,13 @@ class Vector2D:
         return f'V2({self.x:.2f}, {self.y:.2f})'
     
     def __repr__(self) -> str:
-        return f'V({self.x:.1f}, {self.y:.1f})'
+        return f'V2({self.x:.1f}, {self.y:.1f})'
+    
+    def __neg__(self) -> 'Vector2D':
+        return Vector2D(-self.x, -self.y)
+    
+    def __abs__(self) -> 'Vector2D':
+        return Vector2D(abs(self.x), abs(self.y))
     
     def __add__(self, other: Union[float, 'Vector2D']) -> 'Vector2D':
         if isinstance(other, float):
@@ -28,11 +34,8 @@ class Vector2D:
         else:
             return Vector2D(self.x + other.x, self.y + other.y)
     
-    def __neg__(self) -> 'Vector2D':
-        return Vector2D(-self.x, -self.y)
-    
     def __sub__(self, other: Union[float, 'Vector2D']) -> 'Vector2D':
-        return self + (-other)
+        return self.__add__(-other)
     
     def __mul__(self, other: float) -> 'Vector2D':
         return Vector2D(self.x * other, self.y * other)
@@ -40,11 +43,23 @@ class Vector2D:
     def __truediv__(self, other: float) -> 'Vector2D':
         return Vector2D(self.x / other, self.y / other)
     
+    def __floordiv__(self, other: float) -> 'Vector2D':
+        return Vector2D(self.x // other, self.y // other)
+    
     def __iadd__(self, other: Union[float, 'Vector2D']) -> 'Vector2D':
-        return self + other
+        return self.__add__(other)
     
     def __isub__(self, other: Union[float, 'Vector2D']) -> 'Vector2D':
-        return self - other
+        return self.__sub__(other)
+    
+    def __imul__(self, other: float) -> 'Vector2D':
+        return self.__mul__(other)
+    
+    def __itruediv__(self, other: float) -> 'Vector2D':
+        return self.__truediv__(other)
+    
+    def __ifloordiv__(self, other: float) -> 'Vector2D':
+        return self.__floordiv__(other)
     
     def tuple(self) -> Tuple[float, float]:
         return (self.x, self.y)

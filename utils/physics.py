@@ -116,7 +116,7 @@ class SAT:
 
 class CollisionHandler:
     GRID_SIZE = 50
-    COR = 1.0 # 
+    COR = 1.0 # coefficient of restitution
 
     @staticmethod
     def assign_grid_locations(sprites: List[BODY]) -> Tuple[List[Tuple[int, int]], Dict[Tuple[int, int], List[BODY]]]:
