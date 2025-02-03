@@ -126,7 +126,10 @@ class App(Avour):
                 n_segments=self.NUM_SEGMENTS
             )
             self.color(150)
-            self.thickness(1)
+            if not self.hide_nodes:
+                self.thickness(1)
+            else:
+                self.thickness(4)
             self.lines(curve_points)
             self.color(255)
             if not self.hide_nodes:

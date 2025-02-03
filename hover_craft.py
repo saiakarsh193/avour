@@ -44,7 +44,7 @@ class Craft:
         self.max_thrust = 2500.0
 
         # variables
-        self.position = position if type(position) == Vector2D else Vector2D.from_tuple(position)
+        self.position = position if isinstance(position, Vector2D) else Vector2D.from_tuple(position)
         self.velocity = Vector2D.origin()
         self.acceleration = Vector2D.origin()
         self.angle = 0.0 # 0 -> PI

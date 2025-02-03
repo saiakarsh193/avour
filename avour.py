@@ -5,7 +5,7 @@
 
 import math
 import pyglet
-from typing import Tuple, Dict, List, Union, Literal
+from typing import Tuple, Dict, List, Union, Literal, Optional
 
 COORD3FLOAT = Tuple[float, float, float]
 COORD2FLOAT = Tuple[float, float]
@@ -71,7 +71,7 @@ class Avour:
 
         # drawing variables
         self.batch = pyglet.graphics.Batch()
-        self.objects = []
+        self.objects: List[pyglet.shapes.ShapeBase] = []
 
     # world level
 
@@ -359,18 +359,23 @@ class Avour:
             pyglet.shapes.Arc(pos[0], pos[1], radius, start_angle=angle_start, angle=angle_delta, closed=closed, thickness=thickness, color=self._color, batch=self.batch)
         )
     
-    def rect(self, pos: COORD2FLOAT, width: int, height: int) -> None:
+    def rect(self, pos: COORD2FLOAT, width: int, height: int, radius: Optional[int] = None) -> None:
         self._check_inside_physics_loop()
         pos = self._local_to_screen_coordinates(pos)
         width = width * self._scale
         height = height * self._scale
         if self._fill:
             # rect is drawn upwards wrt origin (as x goes right and y goes up), therefore we do y = y - height to counter this
-            self.objects.append(
-                # pyglet.shapes.RoundedRectangle(pos[0], pos[1], width, height, radius=25, color=self._color, batch=self.batch)
-                # pyglet.shapes.BorderedRectangle(pos[0], pos[1], width, height, border=3, border_color=(255, 0, 0), color=self._color, batch=self.batch)
-                pyglet.shapes.Rectangle(pos[0], pos[1] - height, width, height, color=self._color, batch=self.batch)
-            )
+            # pyglet.shapes.BorderedRectangle(pos[0], pos[1], width, height, border=3, border_color=(255, 0, 0), color=self._color, batch=self.batch)
+            if radius != None:
+                radius = radius * self._scale
+                self.objects.append(
+                    pyglet.shapes.RoundedRectangle(pos[0], pos[1] - height, width, height, radius=radius, color=self._color, batch=self.batch)
+                )
+            else:
+                self.objects.append(
+                    pyglet.shapes.Rectangle(pos[0], pos[1] - height, width, height, color=self._color, batch=self.batch)
+                )
         else:
             thickness = self._thickness * self._scale
             # we add last point as well (5 points) to make it closed manually, and we add thickness / 2 to prevent weird looking edges
