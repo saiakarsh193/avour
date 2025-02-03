@@ -310,56 +310,56 @@ class Avour:
                     pyglet.shapes.Line(points[ind][0], points[ind][1], points[ind + 1][0], points[ind + 1][1], width=thickness, color=self._color, batch=self.batch)
                 )
 
-    def bezier(self, points: List[COORD2FLOAT], factor: float = 1.0) -> None:
+    def bezier(self, points: List[COORD2FLOAT], factor: float = 1.0, segments: int = 100) -> None:
         self._check_inside_physics_loop()
         points = [self._local_to_screen_coordinates(point) for point in points]
         thickness = self._thickness * self._scale
         self.objects.append(
-            pyglet.shapes.BezierCurve(*points, t=factor, thickness=thickness, color=self._color, batch=self.batch)
+            pyglet.shapes.BezierCurve(*points, t=factor, segments=segments, thickness=thickness, color=self._color, batch=self.batch)
         )
 
-    def circle(self, pos: COORD2FLOAT, radius: float) -> None:
+    def circle(self, pos: COORD2FLOAT, radius: float, segments: int = None) -> None:
         self._check_inside_physics_loop()
         pos = self._local_to_screen_coordinates(pos)
         radius = radius * self._scale
         if self._fill:
             self.objects.append(
-                pyglet.shapes.Circle(pos[0], pos[1], radius, color=self._color, batch=self.batch)
+                pyglet.shapes.Circle(pos[0], pos[1], radius, segments=segments, color=self._color, batch=self.batch)
             )
         else:
             thickness = self._thickness * self._scale
             self.objects.append(
-                pyglet.shapes.Arc(pos[0], pos[1], radius, start_angle=0, angle=math.tau, closed=True, thickness=thickness, color=self._color, batch=self.batch)
+                pyglet.shapes.Arc(pos[0], pos[1], radius, segments=segments, start_angle=0, angle=math.tau, closed=True, thickness=thickness, color=self._color, batch=self.batch)
             )
     
-    def ellipse(self, pos: COORD2FLOAT, major: float, minor: float) -> None:
+    def ellipse(self, pos: COORD2FLOAT, major: float, minor: float, segments: int = None) -> None:
         self._check_inside_physics_loop()
         pos = self._local_to_screen_coordinates(pos)
         major = major * self._scale
         minor = minor * self._scale
         if self._fill:
             self.objects.append(
-                pyglet.shapes.Ellipse(pos[0], pos[1], major, minor, color=self._color, batch=self.batch)
+                pyglet.shapes.Ellipse(pos[0], pos[1], major, minor, segments=segments, color=self._color, batch=self.batch)
             )
 
-    def sector(self, pos: COORD2FLOAT, radius: float, angle_start: float, angle_delta: float) -> None:
+    def sector(self, pos: COORD2FLOAT, radius: float, angle_start: float, angle_delta: float, segments: int = None) -> None:
         self._check_inside_physics_loop()
         pos = self._local_to_screen_coordinates(pos)
         radius = radius * self._scale
         self.objects.append(
-            pyglet.shapes.Sector(pos[0], pos[1], radius, start_angle=angle_start, angle=angle_delta, color=self._color, batch=self.batch)
+            pyglet.shapes.Sector(pos[0], pos[1], radius, segments=segments, start_angle=angle_start, angle=angle_delta, color=self._color, batch=self.batch)
         )
 
-    def arc(self, pos: COORD2FLOAT, radius: float, angle_start: float, angle_delta: float, closed: bool = False) -> None:
+    def arc(self, pos: COORD2FLOAT, radius: float, angle_start: float, angle_delta: float, closed: bool = False, segments: int = None) -> None:
         self._check_inside_physics_loop()
         pos = self._local_to_screen_coordinates(pos)
         radius = radius * self._scale
         thickness = self._thickness * self._scale
         self.objects.append(
-            pyglet.shapes.Arc(pos[0], pos[1], radius, start_angle=angle_start, angle=angle_delta, closed=closed, thickness=thickness, color=self._color, batch=self.batch)
+            pyglet.shapes.Arc(pos[0], pos[1], radius, segments=segments, start_angle=angle_start, angle=angle_delta, closed=closed, thickness=thickness, color=self._color, batch=self.batch)
         )
     
-    def rect(self, pos: COORD2FLOAT, width: int, height: int, radius: Optional[int] = None) -> None:
+    def rect(self, pos: COORD2FLOAT, width: int, height: int, radius: Optional[int] = None, segments: int = None) -> None:
         self._check_inside_physics_loop()
         pos = self._local_to_screen_coordinates(pos)
         width = width * self._scale
@@ -370,7 +370,7 @@ class Avour:
             if radius != None:
                 radius = radius * self._scale
                 self.objects.append(
-                    pyglet.shapes.RoundedRectangle(pos[0], pos[1] - height, width, height, radius=radius, color=self._color, batch=self.batch)
+                    pyglet.shapes.RoundedRectangle(pos[0], pos[1] - height, width, height, radius=radius, segments=segments, color=self._color, batch=self.batch)
                 )
             else:
                 self.objects.append(
