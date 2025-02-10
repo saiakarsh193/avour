@@ -39,26 +39,36 @@ class Avour:
             self,
             screen_size: COORD2INT = (1200, 800),
             screen_title: str = '',
-            show_fps: bool = False
+            show_fps: bool = False,
+            show_fullscreen: bool = False,
         ) -> None:
-        self.window = pyglet.window.Window(width=screen_size[0], height=screen_size[1], caption=screen_title) # create window
+        # create window
+        self.window = pyglet.window.Window(
+            width=screen_size[0],
+            height=screen_size[1],
+            caption=screen_title,
+            fullscreen=show_fullscreen,
+            file_drops=True,
+        )
         self.fps_display = pyglet.window.FPSDisplay(window=self.window) # for monitoring fps
         self.window.switch_to() # tell pyglet that this is the current window
 
         # set window event handlers (both input and others)
-        # NOTE: we directly bind on_draw() rather than schedule it
-        # because, scheduling forces N calls to be made every second (leading to screen tear and shuttering black screen)
-        # but if we bind it, it will automatically reduce call count (reducing frame rate) and prevents artifacts
-        self.window.on_draw = self._frame_wrapper
         self.window.on_key_press = self._on_keydown_wrapper
         self.window.on_key_release = self._on_keyup_wrapper
         self.window.on_mouse_motion = self._on_mousemove_wrapper
         self.window.on_mouse_drag = self._on_mousedrag_wrapper
         self.window.on_mouse_press = self._on_mousedown_wrapper
         self.window.on_mouse_release = self._on_mouseup_wrapper
+        self.window.on_mouse_scroll = self._on_mousewheel_wrapper
+        # NOTE: we directly bind on_draw() rather than schedule it
+        # because, scheduling forces N calls to be made every second (leading to screen tear and shuttering black screen)
+        # but if we bind it, it will automatically reduce call count (reducing frame rate) and prevents artifacts
+        self.window.on_draw = self._frame_wrapper
+        self.window.on_close = self.exit
         self.window.on_activate = self.on_activate
         self.window.on_deactivate = self.on_deactivate
-        self.window.on_close = self.exit
+        self.window.on_file_drop = self._on_file_drop_wrapper
 
         # state variables
         self.show_fps = show_fps
@@ -197,6 +207,15 @@ class Avour:
     def on_mouseup(self, pos: COORD2FLOAT, button: str) -> None:
         pass
 
+    def _on_mousewheel_wrapper(self, x: int, y: int, scroll_x: float, scroll_y: float) -> None:
+        coord = self._screen_to_local_coordinates((x, y))
+        self.on_mousewheel(coord, scroll_y)
+
+    def on_mousewheel(self, pos: COORD2FLOAT, value: float) -> None:
+        pass
+
+    # extra internal events
+
     def on_activate(self):
         pass
         # print("Switched back to pyglet app")
@@ -204,6 +223,14 @@ class Avour:
     def on_deactivate(self):
         pass
         # print("Switched to another app")
+
+    def _on_file_drop_wrapper(self, x: int, y: int, paths: list[str]) -> None:
+        coord = self._screen_to_local_coordinates((x, y))
+        if len(paths) > 0:
+            self.on_file_drop(pos=coord, path=paths[0])
+    
+    def on_file_drop(self, pos: COORD2FLOAT, path: str) -> None:
+        pass
 
     # main loop
 
@@ -276,13 +303,13 @@ class Avour:
             pyglet.shapes.Rectangle(0, 0, width, height, color=color, batch=self.batch)
         )
 
-    def text(self, text: str, pos: COORD2FLOAT, font_name: str = 'Arial', font_size: int = 20, anchor_x: TEXT_ANCHOR_X = 'left', anchor_y: TEXT_ANCHOR_Y = 'baseline', use_screen_coordinates: bool = False, bold: bool = False, italic: bool = False, multiline: bool = False) -> None:
+    def text(self, text: str, pos: COORD2FLOAT, font_name: str = 'Arial', font_size: int = 20, anchor_x: TEXT_ANCHOR_X = 'left', anchor_y: TEXT_ANCHOR_Y = 'baseline', use_screen_coordinates: bool = False, bold: bool = False, italic: bool = False, multiline: bool = False, width: int = None) -> None:
         self._check_inside_physics_loop()
         # if given pos are already in screen coordinates, dont transform
         if not use_screen_coordinates:
             pos = self._local_to_screen_coordinates(pos)
         self.objects.append(
-            pyglet.text.Label(text=text, x=pos[0], y=pos[1], font_name=font_name, font_size=font_size, anchor_x=anchor_x, anchor_y=anchor_y, bold=bold, italic=italic, multiline=multiline, color=self._color, batch=self.batch)
+            pyglet.text.Label(text=text, x=pos[0], y=pos[1], width=width, font_name=font_name, font_size=font_size, anchor_x=anchor_x, anchor_y=anchor_y, bold=bold, italic=italic, multiline=multiline, color=self._color, batch=self.batch)
         )
 
     def line(self, start_pos: COORD2FLOAT, end_pos: COORD2FLOAT) -> None:
