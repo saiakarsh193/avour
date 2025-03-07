@@ -1,8 +1,8 @@
 import math
 from avour import Avour, COORD2FLOAT
-from utils.vector import Vector2D
-from utils.physics import ConstrainedBody
-from utils.math import smoothen_tuples
+from avour.utils.vector import Vector2D
+from avour.utils.physics import ConstrainedBody
+from avour.utils.math import smoothen_tuples
 
 class Snake:
     def __init__(self) -> None:

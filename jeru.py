@@ -2,10 +2,10 @@ import time
 import random
 from typing import List
 from avour import Avour, COORD2INT, COORD2FLOAT
-from utils.math import clip
-from utils.vector import Vector2D
-from utils.physics import rect_collision
-from utils.draw import SpriteVertexGroup, SpriteShape
+from avour.utils.math import clip
+from avour.utils.vector import Vector2D
+from avour.utils.physics import rect_collision
+from avour.utils.draw import SpriteVertexGroup, SpritePrimitive
 
 class Shooter:
     speed = 10
@@ -18,7 +18,7 @@ class Shooter:
 
         # svg
         rocket_body = SpriteVertexGroup(
-            SpriteShape.rect((0, 0), self.dim[0], self.dim[1]),
+            SpritePrimitive.rect_primitive((0, 0), self.dim[0], self.dim[1]),
             color=(100, 100, 100)
         )
         rocket_fin = SpriteVertexGroup([
@@ -38,21 +38,21 @@ class Shooter:
             (0, 3)
         ], color=(100, 100, 100))
         rocket_exhaust = SpriteVertexGroup(
-            SpriteShape.rect((0, 0), 10, 30),
+            SpritePrimitive.rect_primitive((0, 0), 10, 30),
             color=(255, 136, 51)
         )
         rocket_exhaust2 = SpriteVertexGroup(
-            SpriteShape.rect((0, 0), 10, 40),
+            SpritePrimitive.rect_primitive((0, 0), 10, 40),
             color=(255, 73, 28)
         )
 
         self.svg = SpriteVertexGroup() # empty group to hold other groups
-        self.svg.add_group(rocket_body, origin=Vector2D(-self.dim[0] / 2, 0), scale=1)
-        self.svg.add_group(rocket_fin, origin=Vector2D(self.dim[0] / 2, -self.dim[1]), scale=15)
-        self.svg.add_group(rocket_fin.flip_on_x(), origin=Vector2D(-self.dim[0] / 2, -self.dim[1]), scale=15)
-        self.svg.add_group(rocket_exhaust, origin=Vector2D(-5, -self.dim[1]), scale=1)
-        self.svg.add_group(rocket_cone, origin=Vector2D(0, 0), scale=15)
-        self.svg.add_group(rocket_cone2, origin=Vector2D(0, -self.dim[1] -10), scale=10)
+        self.svg.add_group(rocket_body, position=Vector2D(-self.dim[0] / 2, 0), scale=1)
+        self.svg.add_group(rocket_fin, position=Vector2D(self.dim[0] / 2, -self.dim[1]), scale=15)
+        self.svg.add_group(rocket_fin.flip_on_x(), position=Vector2D(-self.dim[0] / 2, -self.dim[1]), scale=15)
+        self.svg.add_group(rocket_exhaust, position=Vector2D(-5, -self.dim[1]), scale=1)
+        self.svg.add_group(rocket_cone, position=Vector2D(0, 0), scale=15)
+        self.svg.add_group(rocket_cone2, position=Vector2D(0, -self.dim[1] -10), scale=10)
 
     def move(self, left: int = 0, right: int = 0) -> None:
         if left > 0:
@@ -71,9 +71,9 @@ class Shooter:
         return rect_collision(rocket_top, rocket_bot, obstacle_top, obstacle_bot)
 
     def draw(self, avour: Avour) -> None:
-        for shape in self.svg.shapes(origin=self.pos, scale=1):
-            avour.color(shape.color)
-            avour.polygon(shape.vertices)
+        for shape, color in self.svg.apply_transform(position=self.pos, scale=1):
+            avour.color(color)
+            avour.polygon([vertex.tuple() for vertex in shape])
 
 class Bullet:
     speed = 25

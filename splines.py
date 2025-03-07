@@ -1,7 +1,7 @@
 from typing import Literal, List, Tuple, Optional
 from avour import Avour, COORD2FLOAT
-from utils.vector import Vector2D
-from utils.math import cubic_bezier
+from avour.utils.vector import Vector2D
+from avour.utils.math import cubic_bezier
 
 class Node:
     NODE_TYPE = Literal['center', 'left', 'right']
