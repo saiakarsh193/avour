@@ -34,7 +34,49 @@ def get_mapper(module):
 key_mapper: Dict[int, str] = get_mapper(pyglet.window.key)
 mouse_mapper: Dict[int, str] = get_mapper(pyglet.window.mouse)
 
+class AvourBatchHandler:
+    """
+    Automatically handle batch selection based on drawing level
+    """
+    def __init__(self):
+        self.batches: Dict[int, Tuple[pyglet.graphics.Batch, List[pyglet.shapes.ShapeBase]]] = {}
+        # the default level is 0
+        self._create_batch(level=0)
+
+    def _create_batch(self, level: int) -> None:
+        assert not level in self.batches
+        self.batches[level] = (
+            pyglet.graphics.Batch(),
+            []
+        )
+
+    def reset_batch_data(self) -> None:
+        for level, (batch, objects) in self.batches.items():
+            # remove existing objects from memory
+            for object in objects:
+                object.delete()
+            
+        for level in self.batches:
+            # reinitalize the batches
+            self.batches[level] = (
+                pyglet.graphics.Batch(),
+                []
+            )
+    
+    def get_batch_for_level(self, level: int = 0) -> Tuple[pyglet.graphics.Batch, List[pyglet.shapes.ShapeBase]]:
+        if not level in self.batches:
+            self._create_batch(level)
+        return self.batches[level]
+    
+    def draw(self) -> None:
+        for level in sorted(self.batches.keys()):
+            batch, objects = self.batches[level]
+            batch.draw()
+
 class Avour:
+    """
+    Pyglet and OpenGL based drawing backend
+    """
     def __init__(
             self,
             screen_size: COORD2INT = (1200, 800),
@@ -50,8 +92,10 @@ class Avour:
             fullscreen=show_fullscreen,
             file_drops=True,
         )
-        self.fps_display = pyglet.window.FPSDisplay(window=self.window) # for monitoring fps
         self.window.switch_to() # tell pyglet that this is the current window
+        if show_fps:
+            # for monitoring fps and display on screen
+            self.fps_display = pyglet.window.FPSDisplay(window=self.window)
 
         # set window event handlers (both input and others)
         self.window.on_key_press = self._on_keydown_wrapper
@@ -70,7 +114,7 @@ class Avour:
         self.window.on_deactivate = self.on_deactivate
         self.window.on_file_drop = self._on_file_drop_wrapper
 
-        # state variables
+        # variables
         self.show_fps = show_fps
         self.frame_rate = 60
         self.physics_rate = 120
@@ -78,10 +122,7 @@ class Avour:
         self.keys_active: Dict[str, int] = {} # to store live/active keys and press duration
         self.reset() # set draw states
         self._state_memory = [] # to store draw states
-
-        # drawing variables
-        self.batch = pyglet.graphics.Batch()
-        self.objects: List[pyglet.shapes.ShapeBase] = []
+        self.batch_handler = AvourBatchHandler() # to handle multiple batches
 
     # world level
 
@@ -235,20 +276,15 @@ class Avour:
     # main loop
 
     def _frame_wrapper(self) -> None:
-        # initialize frame level variables
-        self.batch = pyglet.graphics.Batch()
-        self.objects = []
+        # resetting batch data
+        self.batch_handler.reset_batch_data()
 
         # clearing window, making shape objects and drawing them
         self.window.clear() # clear the window
         self.draw() # user defined frame draw call to create objects
-        self.batch.draw() # drawing all objects using one batch for efficiency
+        self.batch_handler.draw() # drawing objects using batches for efficiency and control
         if self.show_fps: # draw inbuilt fps object
             self.fps_display.draw()
-
-        # cleaning up
-        for object in self.objects:
-            object.delete()
 
     def draw(self) -> None:
         pass
@@ -295,98 +331,114 @@ class Avour:
     def _check_inside_physics_loop(self) -> None:
         assert not self._running_physics, SyntaxError('drawing objects inside physics loop is not permitted')
 
+    def _add_object_to_batch(self, obj: Union[pyglet.shapes.ShapeBase, pyglet.text.layout.TextLayout], level: int) -> None:
+        batch, objects = self.batch_handler.get_batch_for_level(level)
+        obj.batch = batch
+        objects.append(obj)
+
     def background(self, color: COLOR_EXTENDED) -> None:
         self._check_inside_physics_loop()
         color = self._parse_color(color)
         width, height = self.get_screen_size()
-        self.objects.append(
-            pyglet.shapes.Rectangle(0, 0, width, height, color=color, batch=self.batch)
+        self._add_object_to_batch(
+            pyglet.shapes.Rectangle(0, 0, width, height, color=color),
+            level=0
         )
 
-    def text(self, text: str, pos: COORD2FLOAT, font_name: str = 'Arial', font_size: int = 20, anchor_x: TEXT_ANCHOR_X = 'left', anchor_y: TEXT_ANCHOR_Y = 'baseline', use_screen_coordinates: bool = False, bold: bool = False, italic: bool = False, multiline: bool = False, width: int = None) -> None:
+    def text(self, text: str, pos: COORD2FLOAT, font_name: str = 'Arial', font_size: int = 20, anchor_x: TEXT_ANCHOR_X = 'left', anchor_y: TEXT_ANCHOR_Y = 'baseline', use_screen_coordinates: bool = False, bold: bool = False, italic: bool = False, multiline: bool = False, width: int = None, level: int = 0) -> None:
         self._check_inside_physics_loop()
         # if given pos are already in screen coordinates, dont transform
         if not use_screen_coordinates:
             pos = self._local_to_screen_coordinates(pos)
-        self.objects.append(
-            pyglet.text.Label(text=text, x=pos[0], y=pos[1], width=width, font_name=font_name, font_size=font_size, anchor_x=anchor_x, anchor_y=anchor_y, bold=bold, italic=italic, multiline=multiline, color=self._color, batch=self.batch)
+        self._add_object_to_batch(
+            pyglet.text.Label(text=text, x=pos[0], y=pos[1], width=width, font_name=font_name, font_size=font_size, anchor_x=anchor_x, anchor_y=anchor_y, bold=bold, italic=italic, multiline=multiline, color=self._color),
+            level=level
         )
 
-    def line(self, start_pos: COORD2FLOAT, end_pos: COORD2FLOAT) -> None:
+    def line(self, start_pos: COORD2FLOAT, end_pos: COORD2FLOAT, level: int = 0) -> None:
         self._check_inside_physics_loop()
         start_pos = self._local_to_screen_coordinates(start_pos)
         end_pos = self._local_to_screen_coordinates(end_pos)
         thickness = self._thickness * self._scale
-        self.objects.append(
-            pyglet.shapes.Line(start_pos[0], start_pos[1], end_pos[0], end_pos[1], width=thickness, color=self._color, batch=self.batch)
+        self._add_object_to_batch(
+            pyglet.shapes.Line(start_pos[0], start_pos[1], end_pos[0], end_pos[1], width=thickness, color=self._color),
+            level=level
         )
     
-    def lines(self, points: List[COORD2FLOAT], closed: bool = False, use_multiline: bool = False) -> None:
+    def lines(self, points: List[COORD2FLOAT], closed: bool = False, use_multiline: bool = False, level: int = 0) -> None:
         self._check_inside_physics_loop()
         points = [self._local_to_screen_coordinates(point) for point in points]
         thickness = self._thickness * self._scale
         if use_multiline:
-            self.objects.append(
-                pyglet.shapes.MultiLine(*points, closed=closed, thickness=thickness, color=self._color, batch=self.batch)
+            self._add_object_to_batch(
+                pyglet.shapes.MultiLine(*points, closed=closed, thickness=thickness, color=self._color),
+                level=level
             )
         else:
             if closed:
                 points.append(points[0])
             for ind in range(len(points) - 1):
-                self.objects.append(
-                    pyglet.shapes.Line(points[ind][0], points[ind][1], points[ind + 1][0], points[ind + 1][1], width=thickness, color=self._color, batch=self.batch)
+                self._add_object_to_batch(
+                    pyglet.shapes.Line(points[ind][0], points[ind][1], points[ind + 1][0], points[ind + 1][1], width=thickness, color=self._color),
+                    level=level
                 )
 
-    def bezier(self, points: List[COORD2FLOAT], factor: float = 1.0, segments: int = 100) -> None:
+    def bezier(self, points: List[COORD2FLOAT], factor: float = 1.0, segments: int = 100, level: int = 0) -> None:
         self._check_inside_physics_loop()
         points = [self._local_to_screen_coordinates(point) for point in points]
         thickness = self._thickness * self._scale
-        self.objects.append(
-            pyglet.shapes.BezierCurve(*points, t=factor, segments=segments, thickness=thickness, color=self._color, batch=self.batch)
+        self._add_object_to_batch(
+            pyglet.shapes.BezierCurve(*points, t=factor, segments=segments, thickness=thickness, color=self._color),
+            level=level
         )
 
-    def circle(self, pos: COORD2FLOAT, radius: float, segments: int = None) -> None:
+    def circle(self, pos: COORD2FLOAT, radius: float, segments: int = None, level: int = 0) -> None:
         self._check_inside_physics_loop()
         pos = self._local_to_screen_coordinates(pos)
         radius = radius * self._scale
         if self._fill:
-            self.objects.append(
-                pyglet.shapes.Circle(pos[0], pos[1], radius, segments=segments, color=self._color, batch=self.batch)
+            self._add_object_to_batch(
+                pyglet.shapes.Circle(pos[0], pos[1], radius, segments=segments, color=self._color),
+                level=level
             )
         else:
             thickness = self._thickness * self._scale
-            self.objects.append(
-                pyglet.shapes.Arc(pos[0], pos[1], radius, segments=segments, start_angle=0, angle=math.tau, closed=True, thickness=thickness, color=self._color, batch=self.batch)
+            self._add_object_to_batch(
+                pyglet.shapes.Arc(pos[0], pos[1], radius, segments=segments, start_angle=0, angle=math.tau, closed=True, thickness=thickness, color=self._color),
+                level=level
             )
     
-    def ellipse(self, pos: COORD2FLOAT, major: float, minor: float, segments: int = None) -> None:
+    def ellipse(self, pos: COORD2FLOAT, major: float, minor: float, segments: int = None, level: int = 0) -> None:
         self._check_inside_physics_loop()
         pos = self._local_to_screen_coordinates(pos)
         major = major * self._scale
         minor = minor * self._scale
         if self._fill:
-            self.objects.append(
-                pyglet.shapes.Ellipse(pos[0], pos[1], major, minor, segments=segments, color=self._color, batch=self.batch)
+            self._add_object_to_batch(
+                pyglet.shapes.Ellipse(pos[0], pos[1], major, minor, segments=segments, color=self._color),
+                level=level
             )
 
-    def sector(self, pos: COORD2FLOAT, radius: float, angle_start: float, angle_delta: float, segments: int = None) -> None:
+    def sector(self, pos: COORD2FLOAT, radius: float, angle_start: float, angle_delta: float, segments: int = None, level: int = 0) -> None:
         self._check_inside_physics_loop()
         pos = self._local_to_screen_coordinates(pos)
         radius = radius * self._scale
-        self.objects.append(
-            pyglet.shapes.Sector(pos[0], pos[1], radius, segments=segments, start_angle=angle_start, angle=angle_delta, color=self._color, batch=self.batch)
+        self._add_object_to_batch(
+            pyglet.shapes.Sector(pos[0], pos[1], radius, segments=segments, start_angle=angle_start, angle=angle_delta, color=self._color),
+            level=level
         )
 
-    def arc(self, pos: COORD2FLOAT, radius: float, angle_start: float, angle_delta: float, closed: bool = False, segments: int = None) -> None:
+    def arc(self, pos: COORD2FLOAT, radius: float, angle_start: float, angle_delta: float, closed: bool = False, segments: int = None, level: int = 0) -> None:
         self._check_inside_physics_loop()
         pos = self._local_to_screen_coordinates(pos)
         radius = radius * self._scale
         thickness = self._thickness * self._scale
-        self.objects.append(
-            pyglet.shapes.Arc(pos[0], pos[1], radius, segments=segments, start_angle=angle_start, angle=angle_delta, closed=closed, thickness=thickness, color=self._color, batch=self.batch)
+        self._add_object_to_batch(
+            pyglet.shapes.Arc(pos[0], pos[1], radius, segments=segments, start_angle=angle_start, angle=angle_delta, closed=closed, thickness=thickness, color=self._color),
+            level=level
         )
     
-    def rect(self, pos: COORD2FLOAT, width: int, height: int, radius: Optional[int] = None, segments: int = None) -> None:
+    def rect(self, pos: COORD2FLOAT, width: int, height: int, radius: Optional[int] = None, segments: int = None, level: int = 0) -> None:
         self._check_inside_physics_loop()
         pos = self._local_to_screen_coordinates(pos)
         width = width * self._scale
@@ -396,30 +448,35 @@ class Avour:
             # pyglet.shapes.BorderedRectangle(pos[0], pos[1], width, height, border=3, border_color=(255, 0, 0), color=self._color, batch=self.batch)
             if radius != None:
                 radius = radius * self._scale
-                self.objects.append(
-                    pyglet.shapes.RoundedRectangle(pos[0], pos[1] - height, width, height, radius=radius, segments=segments, color=self._color, batch=self.batch)
+                self._add_object_to_batch(
+                    pyglet.shapes.RoundedRectangle(pos[0], pos[1] - height, width, height, radius=radius, segments=segments, color=self._color),
+                    level=level
                 )
             else:
-                self.objects.append(
-                    pyglet.shapes.Rectangle(pos[0], pos[1] - height, width, height, color=self._color, batch=self.batch)
+                self._add_object_to_batch(
+                    pyglet.shapes.Rectangle(pos[0], pos[1] - height, width, height, color=self._color),
+                    level=level
                 )
         else:
             thickness = self._thickness * self._scale
             # we add last point as well (5 points) to make it closed manually, and we add thickness / 2 to prevent weird looking edges
             points = [(pos[0], pos[1] - height), (pos[0] + width, pos[1] - height), (pos[0] + width, pos[1]), (pos[0], pos[1]), (pos[0], pos[1] - height - thickness / 2)]
-            self.objects.append(
-                pyglet.shapes.MultiLine(*points, closed=False, thickness=thickness, color=self._color, batch=self.batch)
+            self._add_object_to_batch(
+                pyglet.shapes.MultiLine(*points, closed=False, thickness=thickness, color=self._color),
+                level=level
             )
 
-    def polygon(self, points: List[COORD2FLOAT]) -> None:
+    def polygon(self, points: List[COORD2FLOAT], level: int = 0) -> None:
         self._check_inside_physics_loop()
         points = [self._local_to_screen_coordinates(point) for point in points]
         if self._fill:
-            self.objects.append(
-                pyglet.shapes.Polygon(*points, color=self._color, batch=self.batch)
+            self._add_object_to_batch(
+                pyglet.shapes.Polygon(*points, color=self._color),
+                level=level
             )
         else:
             thickness = self._thickness * self._scale
-            self.objects.append(
-                pyglet.shapes.MultiLine(*points, closed=True, thickness=thickness, color=self._color, batch=self.batch)
+            self._add_object_to_batch(
+                pyglet.shapes.MultiLine(*points, closed=True, thickness=thickness, color=self._color),
+                level=level
             )
