@@ -1,10 +1,3 @@
-# Avour
-
-Avour is a simple wrapper on top of [pyglet](https://pyglet.readthedocs.io) that allows us to draw stuff easily in python. The code flow is inspired from [P5JS](https://p5js.org). The applications range from visualizing simulations, making games, creating UI, etc. If you are interested in quickly setting up a graphical canvas in python, this is for you.
-
-### Example
-Here is a quick [code](demo.py) that draws a circle at the location of your mouse pointer:
-```python
 from avour import Avour, COORD2FLOAT
 
 class App(Avour):
@@ -41,6 +34,3 @@ class App(Avour):
         
 app = App()
 app.run()
-```
-
-The full documentation will be released soon!
