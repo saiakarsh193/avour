@@ -336,6 +336,18 @@ class Avour:
         obj.batch = batch
         objects.append(obj)
 
+    def sprite(self, image: pyglet.image.AbstractImage, pos: COORD2FLOAT, scale: float = 1.0, level: int = 0) -> None:
+        self._check_inside_physics_loop()
+        pos = self._local_to_screen_coordinates(pos)
+        scale = scale * self._scale
+        sprite = pyglet.sprite.Sprite(img=image, x=pos[0], y=pos[1])
+        sprite.scale = scale
+        sprite.y -= sprite.height # to make pos wrt top-left corner
+        self._add_object_to_batch(
+            sprite,
+            level=level
+        )
+
     def background(self, color: COLOR_EXTENDED) -> None:
         self._check_inside_physics_loop()
         color = self._parse_color(color)
@@ -438,7 +450,7 @@ class Avour:
             level=level
         )
     
-    def rect(self, pos: COORD2FLOAT, width: int, height: int, radius: Optional[int] = None, segments: int = None, level: int = 0) -> None:
+    def rect(self, pos: COORD2FLOAT, width: int, height: int, radius: Optional[Union[int, Tuple[int, int, int, int]]] = None, segments: int = None, level: int = 0) -> None:
         self._check_inside_physics_loop()
         pos = self._local_to_screen_coordinates(pos)
         width = width * self._scale
@@ -447,7 +459,10 @@ class Avour:
             # rect is drawn upwards wrt origin (as x goes right and y goes up), therefore we do y = y - height to counter this
             # pyglet.shapes.BorderedRectangle(pos[0], pos[1], width, height, border=3, border_color=(255, 0, 0), color=self._color, batch=self.batch)
             if radius != None:
-                radius = radius * self._scale
+                if isinstance(radius, tuple):
+                    radius = [r * self._scale for r in radius]
+                else:
+                    radius = radius * self._scale
                 self._add_object_to_batch(
                     pyglet.shapes.RoundedRectangle(pos[0], pos[1] - height, width, height, radius=radius, segments=segments, color=self._color),
                     level=level
