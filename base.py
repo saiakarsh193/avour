@@ -357,6 +357,12 @@ class Avour:
             level=0
         )
 
+    def _text_width(self, text: str, font_name: str = 'Arial', font_size: int = 20, bold: bool = False, italic: bool = False, multiline: bool = False, width: int = None) -> int:
+        shape = pyglet.text.Label(text=text, x=0, y=0, width=width, font_name=font_name, font_size=font_size, bold=bold, italic=italic, multiline=multiline)
+        shape_width = shape.content_width
+        shape.delete()
+        return shape_width
+
     def text(self, text: str, pos: COORD2FLOAT, font_name: str = 'Arial', font_size: int = 20, anchor_x: TEXT_ANCHOR_X = 'left', anchor_y: TEXT_ANCHOR_Y = 'baseline', use_screen_coordinates: bool = False, bold: bool = False, italic: bool = False, multiline: bool = False, width: int = None, level: int = 0) -> None:
         self._check_inside_physics_loop()
         # if given pos are already in screen coordinates, dont transform
